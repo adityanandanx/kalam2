@@ -8,7 +8,7 @@ app = FastAPI(
 )
 
 # Include all routes
-app.include_router(handwriting_routes.router)
+app.include_router(handwriting_routes.router, prefix="/api/v1")
 
 
 @app.get("/")
