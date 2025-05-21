@@ -30,6 +30,22 @@ export interface StyleDetailResponse {
   preview: string;
 }
 
+export interface GenerateA4PageParams {
+  text: string;
+  style_id?: number;
+  bias?: number;
+  stroke_color?: string;
+  stroke_width?: number;
+}
+
+export interface GenerateA4PageResponse {
+  status: string;
+  svg_content: string;
+  message: string;
+  line_count: number;
+  page_format: string;
+}
+
 // Hook to generate handwriting
 export const useGenerateHandwriting = () => {
   return useMutation({
@@ -65,5 +81,18 @@ export const useHandwritingStyle = (styleId: number) => {
       return response.data;
     },
     enabled: styleId !== undefined && styleId >= 0,
+  });
+};
+
+// Hook to generate handwriting on an A4 page
+export const useGenerateA4Page = () => {
+  return useMutation({
+    mutationFn: async (params: GenerateA4PageParams) => {
+      const response = await api.post<GenerateA4PageResponse>(
+        "/handwriting/a4page",
+        params
+      );
+      return response.data;
+    },
   });
 };

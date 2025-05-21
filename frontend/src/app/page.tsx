@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
 
 export default function Home() {
   const [text, setText] = useState("Hello, world!");
@@ -58,6 +59,12 @@ export default function Home() {
   return (
     <div className="max-w-screen-xl mx-auto flex flex-col items-center justify-start py-12 px-4 min-h-screen">
       <h1 className="text-[64px] md:text-[129px] font-serif mb-8">Kalam3</h1>
+
+      <div className="w-full flex justify-center mb-8">
+        <Link href="/a4" className="text-blue-600 hover:underline font-medium">
+          Try the new A4 Page Handwriting Generator →
+        </Link>
+      </div>
 
       <div className="w-full max-w-3xl space-y-6">
         <div className="space-y-2">

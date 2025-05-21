@@ -3,6 +3,53 @@ import numpy as np
 import tensorflow as tf
 import svgwrite
 from app.utils import drawing
+from typing import List, Dict, Any, Optional, Union, Tuple
+
+
+class TextSegment:
+    """
+    A segment of text with its own styling properties.
+    Can represent a character, word, or other text unit.
+    """
+
+    def __init__(
+        self,
+        text: str,
+        style_id: int = 0,
+        bias: float = 0.5,
+        stroke_color: str = "black",
+        stroke_width: float = 2.0,
+        scale: float = 1.0,
+    ):
+        """Initialize a text segment with styling properties."""
+        self.text = text
+        self.style_id = style_id
+        self.bias = bias
+        self.stroke_color = stroke_color
+        self.stroke_width = stroke_width
+        self.scale = scale
+        self.strokes = None  # Will be populated after sampling
+
+
+class LayoutConfig:
+    """Configuration for text layout."""
+
+    def __init__(
+        self,
+        line_spacing: float = 1.2,
+        word_spacing: float = 1.0,
+        char_spacing: float = 1.0,
+        alignment: str = "left",
+        max_width: Optional[float] = None,
+    ):
+        """Initialize layout configuration."""
+        self.line_spacing = line_spacing  # As a multiple of the base line height
+        self.word_spacing = word_spacing  # As a multiple of the default space width
+        self.char_spacing = (
+            char_spacing  # As a multiple of the default character spacing
+        )
+        self.alignment = alignment  # 'left', 'center', 'right', or 'justify'
+        self.max_width = max_width  # Maximum width for text wrapping, None for no limit
 
 
 class Hand:
@@ -13,6 +60,7 @@ class Hand:
         os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Only show errors, not warnings/info
         self.model_path = model_path
         self.session = None
+        self.base_line_height = 60  # Base line height in pixels
 
         # Load the model
         self._load_model()
@@ -28,42 +76,194 @@ class Hand:
 
     def write(
         self,
-        filename,
-        lines,
-        biases=None,
-        styles=None,
-        stroke_colors=None,
-        stroke_widths=None,
+        filename: str,
+        lines: List[str],
+        biases: Optional[List[float]] = None,
+        styles: Optional[List[int]] = None,
+        stroke_colors: Optional[List[str]] = None,
+        stroke_widths: Optional[List[float]] = None,
+        scales: Optional[List[float]] = None,
     ):
-        """Generate handwriting for the given text and save as SVG."""
-        # Match original Hand validation
-        valid_char_set = set(drawing.alphabet)
-        for line_num, line in enumerate(lines):
-            if len(line) > 75:
-                raise ValueError(
-                    (
-                        "Each line must be at most 75 characters. "
-                        "Line {} contains {}"
-                    ).format(line_num, len(line))
-                )
+        """
+        Generate handwriting for the given text lines and save as SVG.
+        This method retains backward compatibility with the original API.
+        """
+        # Create text segments from lines (for backward compatibility)
+        segments_by_line = []
+        for i, line in enumerate(lines):
+            style = styles[i] if styles and i < len(styles) else 0
+            bias = biases[i] if biases and i < len(biases) else 0.5
+            color = (
+                stroke_colors[i]
+                if stroke_colors and i < len(stroke_colors)
+                else "black"
+            )
+            width = (
+                stroke_widths[i] if stroke_widths and i < len(stroke_widths) else 2.0
+            )
+            scale_factor = scales[i] if scales and i < len(scales) else 1.0
 
-            for char in line:
-                if char not in valid_char_set:
-                    raise ValueError(
-                        (
-                            "Invalid character {} detected in line {}. "
-                            "Valid character set is {}"
-                        ).format(char, line_num, valid_char_set)
+            segment = TextSegment(
+                text=line,
+                style_id=style,
+                bias=bias,
+                stroke_color=color,
+                stroke_width=width,
+                scale=scale_factor,
+            )
+            segments_by_line.append([segment])
+
+        # Use the new method with the segments
+        self.write_segments(filename, segments_by_line)
+
+    def write_segments(
+        self,
+        filename: str,
+        segments_by_line: List[List[TextSegment]],
+        layout_config: Optional[LayoutConfig] = None,
+        page_dimensions: Optional[Tuple[float, float]] = None,
+        margins: Optional[Tuple[float, float, float, float]] = None,
+    ):
+        """
+        Generate handwriting for the given text segments and save as SVG.
+        Args:
+            filename: Path to save the SVG file
+            segments_by_line: List of lists of TextSegment objects, grouped by line
+            layout_config: Optional layout configuration
+            page_dimensions: Optional (width, height) for the page in pixels
+            margins: Optional (left, top, right, bottom) margins in pixels
+        """
+        # Use default layout config if none provided
+        if layout_config is None:
+            layout_config = LayoutConfig()
+
+        # Validate all characters in segments
+        self._validate_segments(segments_by_line)
+
+        # Sample strokes for each segment
+        self._sample_segments(segments_by_line)
+
+        # Draw all segments with their respective styling
+        self._draw_segments(
+            filename, segments_by_line, layout_config, page_dimensions, margins
+        )
+
+    def process_text(
+        self,
+        text: str,
+        segmentation: str = "line",
+        default_style: int = 0,
+        default_bias: float = 0.5,
+        default_color: str = "black",
+        default_width: float = 2.0,
+        default_scale: float = 1.0,
+    ) -> List[List[TextSegment]]:
+        """
+        Process input text into segments based on the specified segmentation type.
+        Args:
+            text: The input text to process
+            segmentation: Segmentation type - 'line', 'word', or 'character'
+            default_*: Default styling properties for all segments
+
+        Returns:
+            List of lists of TextSegment objects, grouped by line
+        """
+        # Split text into lines first
+        lines = text.split("\n")
+        segments_by_line = []
+
+        for line in lines:
+            line_segments = []
+
+            if segmentation == "line":
+                # One segment per line
+                if line:
+                    line_segments.append(
+                        TextSegment(
+                            text=line,
+                            style_id=default_style,
+                            bias=default_bias,
+                            stroke_color=default_color,
+                            stroke_width=default_width,
+                            scale=default_scale,
+                        )
                     )
 
-        strokes = self._sample(lines, biases=biases, styles=styles)
-        self._draw(
-            strokes,
-            lines,
-            filename,
-            stroke_colors=stroke_colors,
-            stroke_widths=stroke_widths,
-        )
+            elif segmentation == "word":
+                # Segment by words (split by spaces)
+                words = line.split()
+                for word in words:
+                    line_segments.append(
+                        TextSegment(
+                            text=word,
+                            style_id=default_style,
+                            bias=default_bias,
+                            stroke_color=default_color,
+                            stroke_width=default_width,
+                            scale=default_scale,
+                        )
+                    )
+
+            elif segmentation == "character":
+                # Segment by individual characters
+                for char in line:
+                    if char in drawing.alphabet:
+                        line_segments.append(
+                            TextSegment(
+                                text=char,
+                                style_id=default_style,
+                                bias=default_bias,
+                                stroke_color=default_color,
+                                stroke_width=default_width,
+                                scale=default_scale,
+                            )
+                        )
+
+            segments_by_line.append(line_segments)
+
+        return segments_by_line
+
+    def _validate_segments(self, segments_by_line: List[List[TextSegment]]):
+        """Validate all characters in the segments."""
+        valid_char_set = set(drawing.alphabet)
+
+        for line_num, line_segments in enumerate(segments_by_line):
+            for segment_num, segment in enumerate(line_segments):
+                if len(segment.text) > 75:
+                    raise ValueError(
+                        f"Each segment must be at most 75 characters. "
+                        f"Line {line_num}, segment {segment_num} contains {len(segment.text)}"
+                    )
+
+                for char in segment.text:
+                    if char not in valid_char_set:
+                        raise ValueError(
+                            f"Invalid character '{char}' detected in line {line_num}, "
+                            f"segment {segment_num}. Valid character set is {valid_char_set}"
+                        )
+
+    def _sample_segments(self, segments_by_line: List[List[TextSegment]]):
+        """Sample strokes for each segment and store in the segment objects."""
+        # Flatten all segments for batch processing
+        all_segments = []
+        for line_segments in segments_by_line:
+            all_segments.extend(line_segments)
+
+        # Skip if no segments
+        if not all_segments:
+            return
+
+        # Prepare data for model input
+        texts = [segment.text for segment in all_segments]
+        biases = [segment.bias for segment in all_segments]
+        styles = [segment.style_id for segment in all_segments]
+
+        # Generate strokes for all segments
+        strokes = self._sample(texts, biases=biases, styles=styles)
+
+        # Assign strokes back to segments
+        for i, segment in enumerate(all_segments):
+            segment.strokes = strokes[i]
 
     def _sample(self, lines, biases=None, styles=None):
         """Sample from the model to generate handwriting strokes."""
@@ -160,47 +360,179 @@ class Hand:
         samples = [sample[~np.all(sample == 0.0, axis=1)] for sample in samples]
         return samples
 
-    def _draw(self, strokes, lines, filename, stroke_colors=None, stroke_widths=None):
-        """Draw the strokes as an SVG file."""
-        stroke_colors = stroke_colors or ["black"] * len(lines)
-        stroke_widths = stroke_widths or [2] * len(lines)
+    def _draw_segments(
+        self,
+        filename: str,
+        segments_by_line: List[List[TextSegment]],
+        layout_config: LayoutConfig,
+        page_dimensions: Optional[Tuple[float, float]] = None,
+        margins: Optional[Tuple[float, float, float, float]] = None,
+    ):
+        """Draw all segments with their respective styling."""
+        # Calculate total height based on number of lines and line spacing
+        line_height = self.base_line_height * layout_config.line_spacing
+        num_lines = len(segments_by_line)
 
-        line_height = 60
-        view_width = 1000
-        view_height = line_height * (len(strokes) + 1)
+        # Calculate height for empty document (minimum 1 line height)
+        view_height = max(1, num_lines) * line_height
+        view_width = 1000  # Default width
 
+        # Update page dimensions if provided
+        if page_dimensions:
+            view_width, view_height = page_dimensions
+
+        # Default margins
+        left_margin, top_margin, right_margin, bottom_margin = 0, 0, 0, 0
+
+        # Apply margins if provided
+        if margins:
+            left_margin, top_margin, right_margin, bottom_margin = margins
+
+        # Calculate usable width considering margins
+        usable_width = view_width - left_margin - right_margin
+
+        # Initialize SVG drawing
         dwg = svgwrite.Drawing(filename=filename)
         dwg.viewbox(width=view_width, height=view_height)
         dwg.add(dwg.rect(insert=(0, 0), size=(view_width, view_height), fill="white"))
 
-        initial_coord = np.array([0, -(3 * line_height / 4)])
-        for offsets, line, color, width in zip(
-            strokes, lines, stroke_colors, stroke_widths
-        ):
+        # Track current y-position with top margin
+        y_position = top_margin + (
+            line_height * 0.75
+        )  # Start position, adjusted for baseline
 
-            if not line:
-                initial_coord[1] -= line_height
+        # Process each line
+        for line_segments in segments_by_line:
+            if not line_segments:
+                # Empty line, just advance y-position
+                y_position += line_height
                 continue
 
-            offsets[:, :2] *= 1.5
-            strokes = drawing.offsets_to_coords(offsets)
-            strokes = drawing.denoise(strokes)
-            strokes[:, :2] = drawing.align(strokes[:, :2])
+            # Calculate line metrics and segment positions
+            segment_metrics = self._calculate_segment_metrics(
+                line_segments, usable_width, layout_config
+            )
 
-            strokes[:, 1] *= -1
-            strokes[:, :2] -= strokes[:, :2].min() + initial_coord
-            strokes[:, 0] += (view_width - strokes[:, 0].max()) / 2
+            # Draw each segment in the line, applying left margin to all x positions
+            for segment, metrics in zip(line_segments, segment_metrics):
+                if segment.strokes is None or len(segment.text) == 0:
+                    continue  # Skip empty segments or those without strokes
 
-            prev_eos = 1.0
-            p = "M{},{} ".format(0, 0)
-            for x, y, eos in zip(*strokes.T):
-                p += "{}{},{} ".format("M" if prev_eos == 1.0 else "L", x, y)
-                prev_eos = eos
-            path = svgwrite.path.Path(p)
-            path = path.stroke(color=color, width=width, linecap="round").fill("none")
-            dwg.add(path)
+                # Process strokes for this segment
+                x_pos = metrics["x_position"] + left_margin  # Apply left margin
+                width = metrics["width"]
+                self._draw_segment(
+                    dwg, segment, x_position=x_pos, y_position=y_position
+                )
 
-            initial_coord[1] -= line_height
+            # Advance to next line
+            y_position += line_height
 
+        # Save the SVG file
         dwg.save()
         print(f"SVG saved to {filename}")
+
+    def _calculate_segment_metrics(
+        self,
+        line_segments: List[TextSegment],
+        total_width: float,
+        layout_config: LayoutConfig,
+    ) -> List[Dict[str, float]]:
+        """
+        Calculate positioning metrics for each segment in a line.
+        Returns a list of dictionaries with position and size information.
+        """
+        # Rough estimation of segment widths based on text length and scale
+        segment_metrics = []
+
+        # Estimate natural width for each segment
+        total_natural_width = 0
+        space_width = 10 * layout_config.word_spacing  # Estimated space width
+
+        for i, segment in enumerate(line_segments):
+            # Basic width estimation: ~10px per character × scale factor
+            est_width = len(segment.text) * 10 * segment.scale
+
+            # Store metrics
+            metrics = {
+                "natural_width": est_width,
+                "x_position": 0,  # Will be set later
+                "width": est_width,
+            }
+            segment_metrics.append(metrics)
+
+            total_natural_width += est_width
+
+            # Add space after segment (except for last segment)
+            if i < len(line_segments) - 1:
+                total_natural_width += space_width
+
+        # Calculate actual positions based on alignment
+        x_position = 0
+
+        if layout_config.alignment == "center":
+            # Center alignment: start from the middle
+            x_position = (total_width - total_natural_width) / 2
+
+        elif layout_config.alignment == "right":
+            # Right alignment: start from the right
+            x_position = total_width - total_natural_width
+
+        # Otherwise left alignment (start from x=0)
+
+        # Update x_positions for each segment
+        for i, metrics in enumerate(segment_metrics):
+            metrics["x_position"] = x_position
+            x_position += metrics["natural_width"]
+
+            # Add space after segment (except for last segment)
+            if i < len(segment_metrics) - 1:
+                x_position += space_width
+
+        return segment_metrics
+
+    def _draw_segment(
+        self,
+        dwg: svgwrite.Drawing,
+        segment: TextSegment,
+        x_position: float,
+        y_position: float,
+    ):
+        """Draw a single text segment at the specified position."""
+        # Set up initial transforms
+        offsets = segment.strokes
+        strokes = drawing.offsets_to_coords(offsets)
+        strokes = drawing.denoise(strokes)
+
+        # Apply scaling
+        offsets[:, :2] *= 1.5 * segment.scale
+
+        # Convert back to coordinates and align
+        strokes = drawing.offsets_to_coords(offsets)
+        strokes[:, :2] = drawing.align(strokes[:, :2])
+
+        # Flip y-coordinates and position the segment
+        strokes[:, 1] *= -1
+
+        # Calculate positioning adjustment
+        x_min, y_min = strokes[:, :2].min(axis=0)
+
+        # Adjust for baseline and position
+        position_adjustment = np.array([x_position - x_min, y_position - y_min])
+        strokes[:, :2] += position_adjustment
+
+        # Create SVG path
+        prev_eos = 1.0
+        p = "M{},{} ".format(strokes[0, 0], strokes[0, 1])
+
+        for x, y, eos in zip(*strokes.T):
+            p += "{}{},{} ".format("M" if prev_eos == 1.0 else "L", x, y)
+            prev_eos = eos
+
+        # Add the path to the drawing
+        path = svgwrite.path.Path(p)
+        path = path.stroke(
+            color=segment.stroke_color, width=segment.stroke_width, linecap="round"
+        ).fill("none")
+
+        dwg.add(path)
