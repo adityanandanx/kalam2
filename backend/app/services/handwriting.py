@@ -37,6 +37,7 @@ class LayoutConfig:
     def __init__(
         self,
         line_spacing: float = 1.2,
+        paragraph_spacing: float = 2.0,
         word_spacing: float = 1.0,
         char_spacing: float = 1.0,
         alignment: str = "left",
@@ -44,6 +45,7 @@ class LayoutConfig:
     ):
         """Initialize layout configuration."""
         self.line_spacing = line_spacing  # As a multiple of the base line height
+        self.paragraph_spacing = paragraph_spacing  # As a multiple of the base line height for paragraph breaks
         self.word_spacing = word_spacing  # As a multiple of the default space width
         self.char_spacing = (
             char_spacing  # As a multiple of the default character spacing
@@ -402,10 +404,31 @@ class Hand:
         )  # Start position, adjusted for baseline
 
         # Process each line
-        for line_segments in segments_by_line:
-            if not line_segments:
-                # Empty line, just advance y-position
-                y_position += line_height
+        for i, line_segments in enumerate(segments_by_line):
+            # Check if this is an empty line (paragraph break)
+            is_empty_line = len(line_segments) == 0 or (
+                len(line_segments) == 1 and not line_segments[0].text.strip()
+            )
+
+            # Determine if previous line was empty (to avoid double paragraph spacing)
+            prev_was_empty = False
+            if i > 0:
+                prev_line = segments_by_line[i - 1]
+                prev_was_empty = len(prev_line) == 0 or (
+                    len(prev_line) == 1 and not prev_line[0].text.strip()
+                )
+
+            if is_empty_line:
+                # For empty lines (paragraph breaks), use paragraph spacing
+                # But only if previous line wasn't already empty
+                if not prev_was_empty:
+                    paragraph_height = (
+                        self.base_line_height * layout_config.paragraph_spacing
+                    )
+                    y_position += paragraph_height
+                else:
+                    # If previous line was also empty, just use regular line spacing
+                    y_position += line_height
                 continue
 
             # Calculate line metrics and segment positions

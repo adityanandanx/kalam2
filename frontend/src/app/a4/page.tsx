@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
+import { Slider } from "@/components/ui/slider";
 
 export default function A4Page() {
   const [text, setText] = useState(
@@ -20,6 +21,8 @@ export default function A4Page() {
   );
   const [selectedStyle, setSelectedStyle] = useState<number>(0);
   const [color, setColor] = useState<string>("black");
+  const [lineHeight, setLineHeight] = useState<number>(1.5);
+  const [paragraphSpacing, setParagraphSpacing] = useState<number>(2.0);
   const [generatedSvg, setGeneratedSvg] = useState<string | null>(null);
   const [lineCount, setLineCount] = useState<number>(0);
 
@@ -39,6 +42,8 @@ export default function A4Page() {
         bias: 0.75,
         stroke_color: color,
         stroke_width: 2.0,
+        line_height: lineHeight,
+        paragraph_spacing: paragraphSpacing,
       },
       {
         onSuccess: (data) => {
@@ -89,7 +94,7 @@ export default function A4Page() {
           />
           <p className="text-sm text-gray-500">
             The text will be automatically formatted to fit an A4 page with
-            proper margins.
+            proper margins. Empty lines will be treated as paragraph breaks.
           </p>
         </div>
 
@@ -132,6 +137,42 @@ export default function A4Page() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Label>Line Height: {lineHeight.toFixed(1)}</Label>
+              <span className="text-sm text-gray-500">
+                (Spacing between lines)
+              </span>
+            </div>
+            <Slider
+              value={[lineHeight]}
+              min={0.0}
+              max={3.0}
+              step={0.1}
+              onValueChange={(values) => setLineHeight(values[0])}
+              className="py-4"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Label>Paragraph Spacing: {paragraphSpacing.toFixed(1)}</Label>
+              <span className="text-sm text-gray-500">
+                (Extra space between paragraphs)
+              </span>
+            </div>
+            <Slider
+              value={[paragraphSpacing]}
+              min={0.0}
+              max={4.0}
+              step={0.1}
+              onValueChange={(values) => setParagraphSpacing(values[0])}
+              className="py-4"
+            />
           </div>
         </div>
 

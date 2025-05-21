@@ -160,124 +160,6 @@ def generate_preview(style_id: int, sample_text: str):
         return f"Error generating preview: {str(e)}"
 
 
-@router.post("/markdown")
-async def generate_from_markdown(
-    markdown_text: str = Body(...),
-    style_options: Optional[Dict[str, Dict[str, Any]]] = Body(None),
-    default_style: Optional[int] = Body(0),
-):
-    """
-    Generate handwriting from markdown text with styles for different markdown elements
-
-    Args:
-        markdown_text: The markdown text to convert to handwriting
-        style_options: Optional styling options for different markdown elements
-            Example: {
-                'h1': {'size': 1.5, 'color': 'red', 'width': 3},
-                'h2': {'size': 1.3, 'color': 'blue', 'width': 2.5},
-                'bold': {'width': 3, 'color': 'black'},
-                'italic': {'style': 1},
-                'code': {'color': 'gray'},
-                'link': {'color': 'blue'}
-            }
-        default_style: The base style ID to use for the handwriting
-    """
-    # try:
-    #     # Ensure markdown_text is not empty
-    #     if not markdown_text:
-    #         markdown_text = " "  # Provide a space as minimum content
-
-    #     # Parse the markdown text
-    #     lines, style_params = markdown_parser.parse(markdown_text, style_options)
-
-    #     # Debug information
-    #     print(f"Parsed markdown into {len(lines)} lines:")
-    #     for i, line in enumerate(lines):
-    #         print(f"Line {i}: '{line}' (length: {len(line)})")
-
-    #     # Filter out any empty lines and sanitize text to ensure it works with the handwriting model
-    #     valid_lines = []
-    #     valid_params = []
-    #     valid_char_set = set(drawing.alphabet)
-
-    #     for i, line in enumerate(lines):
-    #         # Skip completely empty lines
-    #         if line != "":
-    #             # Sanitize the line - replace any unsupported characters with spaces
-    #             sanitized_line = ""
-    #             for char in line:
-    #                 if char in valid_char_set:
-    #                     sanitized_line += char
-    #                 else:
-    #                     sanitized_line += " "
-
-    #             # Only add non-empty sanitized lines
-    #             if sanitized_line.strip():
-    #                 valid_lines.append(sanitized_line)
-    #                 valid_params.append(style_params[i])
-    #                 print(f"Added sanitized line: '{sanitized_line}'")
-
-    #     # Ensure we have at least one line
-    #     if not valid_lines:
-    #         valid_lines = ["Hello"]  # Use a simple word instead of just a space
-    #         valid_params = [
-    #             {
-    #                 "stroke_color": "#000000",
-    #                 "stroke_width": 2,
-    #                 "style": default_style,
-    #                 "bias": 0.5,
-    #             }
-    #         ]
-    #         print("No valid lines found, using default 'Hello' text")
-
-    #     # Prepare parameters for the handwriting service
-    #     stroke_colors = [param.get("stroke_color", "black") for param in valid_params]
-    #     stroke_widths = [param.get("stroke_width", 2) for param in valid_params]
-    #     size_scales = [param.get("size_scaling", 1.0) for param in valid_params]
-    #     styles = [param.get("style", default_style) for param in valid_params]
-    #     biases = [param.get("bias", 0.5) for param in valid_params]
-
-    #     # Create a temporary file for the SVG output
-    #     with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as temp_file:
-    #         output_path = temp_file.name
-
-    #     # Generate the handwriting
-    #     hand.write(
-    #         filename=output_path,
-    #         lines=valid_lines,
-    #         biases=biases,
-    #         styles=styles,
-    #         stroke_colors=stroke_colors,
-    #         stroke_widths=stroke_widths,
-    #         size_scales=size_scales,
-    #     )
-
-    #     # Read the generated SVG file
-    #     with open(output_path, "r") as f:
-    #         svg_content = f.read()
-
-    #     # Clean up the temporary file
-    #     os.unlink(output_path)
-
-    #     return {
-    #         "status": "success",
-    #         "svg_content": svg_content,
-    #         "message": "Markdown handwriting generated successfully",
-    #         "lines_count": len(valid_lines),
-    #         "lines": valid_lines,  # Include the processed lines for debugging
-    #         "original_lines": lines,  # Include original parsed lines for debugging
-    #     }
-    # except Exception as e:
-    #     import traceback
-
-    #     error_details = traceback.format_exc()
-    #     raise HTTPException(
-    #         status_code=500,
-    #         detail=f"Error generating markdown handwriting: {str(e)}\n{error_details}",
-    #     )
-    pass
-
-
 @router.post("/advanced")
 async def generate_advanced_handwriting(
     text: str = Body(...),
@@ -401,6 +283,8 @@ async def generate_a4_page(
     bias: Optional[float] = Body(0.5),
     stroke_color: Optional[str] = Body("black"),
     stroke_width: Optional[float] = Body(2.0),
+    line_height: Optional[float] = Body(1.5),
+    paragraph_spacing: Optional[float] = Body(2.0),
 ):
     """
     Generate handwriting on an A4-sized page, automatically splitting text into lines.
@@ -411,6 +295,8 @@ async def generate_a4_page(
         bias: The bias value (randomness factor)
         stroke_color: The color of the handwriting strokes
         stroke_width: The width of the handwriting strokes
+        line_height: The height of each line (as a multiple of the base line height)
+        paragraph_spacing: The spacing between paragraphs (as a multiple of the base line height)
     """
     try:
         # A4 dimensions in pixels (assuming 96 DPI)
@@ -462,7 +348,8 @@ async def generate_a4_page(
 
         # Create layout configuration for A4 page
         layout_config = LayoutConfig(
-            line_spacing=1.5,
+            line_spacing=line_height,
+            paragraph_spacing=paragraph_spacing,
             word_spacing=1.0,
             char_spacing=1.0,
             alignment="left",

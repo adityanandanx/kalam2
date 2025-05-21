@@ -36,6 +36,8 @@ export interface GenerateA4PageParams {
   bias?: number;
   stroke_color?: string;
   stroke_width?: number;
+  line_height?: number;
+  paragraph_spacing?: number;
 }
 
 export interface GenerateA4PageResponse {
