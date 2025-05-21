@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Playfair_Display, Space_Mono } from "next/font/google";
 import "./globals.css";
+import Provider from "@/components/provider";
 
 const outfitSans = Outfit({
   variable: "--font-outfit-sans",
@@ -33,7 +34,7 @@ export default function RootLayout({
       <body
         className={`${outfitSans.variable} ${playfairDisplay.variable} ${spaceMono} antialiased dark`}
       >
-        {children}
+        <Provider>{children}</Provider>
       </body>
     </html>
   );
