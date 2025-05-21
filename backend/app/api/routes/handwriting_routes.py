@@ -44,6 +44,8 @@ async def generate_handwriting(
         with open(output_path, "r") as f:
             svg_content = f.read()
 
+        print(svg_content)
+
         # Clean up the temporary file
         os.unlink(output_path)
 
