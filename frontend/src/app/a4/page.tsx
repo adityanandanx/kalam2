@@ -14,6 +14,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import { Slider } from "@/components/ui/slider";
+import { Input } from "@/components/ui/input";
 
 export default function A4Page() {
   const [text, setText] = useState(
@@ -23,8 +24,11 @@ export default function A4Page() {
   const [color, setColor] = useState<string>("black");
   const [lineHeight, setLineHeight] = useState<number>(1.5);
   const [paragraphSpacing, setParagraphSpacing] = useState<number>(2.0);
-  const [generatedSvg, setGeneratedSvg] = useState<string | null>(null);
+  const [linesPerPage, setLinesPerPage] = useState<number>(25);
+  const [generatedPages, setGeneratedPages] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(0);
   const [lineCount, setLineCount] = useState<number>(0);
+  const [pageCount, setPageCount] = useState<number>(0);
 
   // Fetch available handwriting styles
   const { data: stylesData, isLoading: stylesLoading } = useHandwritingStyles();
@@ -44,11 +48,14 @@ export default function A4Page() {
         stroke_width: 2.0,
         line_height: lineHeight,
         paragraph_spacing: paragraphSpacing,
+        lines_per_page: linesPerPage,
       },
       {
         onSuccess: (data) => {
-          setGeneratedSvg(data.svg_content);
+          setGeneratedPages(data.pages);
+          setCurrentPage(0);
           setLineCount(data.line_count);
+          setPageCount(data.page_count);
         },
         onError: (error) => {
           console.error("Error generating A4 handwriting:", error);
@@ -57,18 +64,47 @@ export default function A4Page() {
     );
   };
 
-  const downloadSvg = () => {
-    if (!generatedSvg) return;
+  const downloadCurrentPage = () => {
+    if (!generatedPages.length || currentPage >= generatedPages.length) return;
 
-    const blob = new Blob([generatedSvg], { type: "image/svg+xml" });
+    const svgContent = generatedPages[currentPage];
+    const blob = new Blob([svgContent], { type: "image/svg+xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "handwritten-a4.svg";
+    a.download = `handwritten-a4-page-${currentPage + 1}.svg`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const downloadAllPages = () => {
+    if (!generatedPages.length) return;
+
+    // For now, we'll just trigger downloads for each page separately
+    // In a real app, you might want to create a ZIP file
+    generatedPages.forEach((svgContent, index) => {
+      const blob = new Blob([svgContent], { type: "image/svg+xml" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `handwritten-a4-page-${index + 1}.svg`;
+      document.body.appendChild(a);
+
+      // Use setTimeout to space out the downloads slightly
+      setTimeout(() => {
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, index * 100);
+    });
+  };
+
+  const goToPage = (pageNumber: number) => {
+    if (pageNumber >= 0 && pageNumber < generatedPages.length) {
+      setCurrentPage(pageNumber);
+    }
   };
 
   return (
@@ -83,7 +119,7 @@ export default function A4Page() {
       <div className="w-full max-w-3xl space-y-6">
         <div className="space-y-2">
           <Label htmlFor="text-input">
-            Enter text to convert to handwriting on an A4 page
+            Enter text to convert to handwriting on A4 pages
           </Label>
           <Textarea
             id="text-input"
@@ -93,8 +129,9 @@ export default function A4Page() {
             className="h-40"
           />
           <p className="text-sm text-gray-500">
-            The text will be automatically formatted to fit an A4 page with
-            proper margins. Empty lines will be treated as paragraph breaks.
+            The text will be automatically formatted to fit A4 pages with proper
+            margins. Empty lines will be treated as paragraph breaks. Long text
+            will be split across multiple pages.
           </p>
         </div>
 
@@ -150,7 +187,7 @@ export default function A4Page() {
             </div>
             <Slider
               value={[lineHeight]}
-              min={0.0}
+              min={0.1}
               max={3.0}
               step={0.1}
               onValueChange={(values) => setLineHeight(values[0])}
@@ -167,10 +204,27 @@ export default function A4Page() {
             </div>
             <Slider
               value={[paragraphSpacing]}
-              min={0.0}
+              min={0.1}
               max={4.0}
               step={0.1}
               onValueChange={(values) => setParagraphSpacing(values[0])}
+              className="py-4"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between">
+              <Label>Lines Per Page: {linesPerPage}</Label>
+              <span className="text-sm text-gray-500">
+                (Maximum lines on each page)
+              </span>
+            </div>
+            <Slider
+              value={[linesPerPage]}
+              min={10}
+              max={40}
+              step={1}
+              onValueChange={(values) => setLinesPerPage(values[0])}
               className="py-4"
             />
           </div>
@@ -184,23 +238,72 @@ export default function A4Page() {
           {isPending ? "Generating..." : "Generate A4 Handwriting"}
         </Button>
 
-        {generatedSvg && (
+        {generatedPages.length > 0 && (
           <div className="mt-8 space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="font-medium">Generated A4 Handwriting</h3>
-              <div className="flex space-x-2">
+              <div className="flex space-x-2 items-center">
                 <span className="text-sm text-gray-500">
-                  {lineCount} lines generated
+                  {lineCount} lines on {pageCount}{" "}
+                  {pageCount === 1 ? "page" : "pages"}
                 </span>
-                <Button onClick={downloadSvg} variant="outline" size="sm">
-                  Download SVG
+                <Button
+                  onClick={downloadCurrentPage}
+                  variant="outline"
+                  size="sm"
+                >
+                  Download Page
                 </Button>
+                {pageCount > 1 && (
+                  <Button
+                    onClick={downloadAllPages}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Download All
+                  </Button>
+                )}
               </div>
             </div>
 
+            {pageCount > 1 && (
+              <div className="flex justify-between items-center">
+                <Button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage <= 0}
+                  variant="outline"
+                  size="sm"
+                >
+                  Previous Page
+                </Button>
+                <div className="flex items-center gap-2">
+                  <span>Page</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={pageCount}
+                    value={currentPage + 1}
+                    onChange={(e) => goToPage(parseInt(e.target.value) - 1)}
+                    className="w-16 text-center"
+                  />
+                  <span>of {pageCount}</span>
+                </div>
+                <Button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage >= pageCount - 1}
+                  variant="outline"
+                  size="sm"
+                >
+                  Next Page
+                </Button>
+              </div>
+            )}
+
             <div className="border rounded-md overflow-hidden bg-gray-50 p-4">
               <div
-                dangerouslySetInnerHTML={{ __html: generatedSvg }}
+                dangerouslySetInnerHTML={{
+                  __html: generatedPages[currentPage] || "",
+                }}
                 className="w-full"
                 style={{ maxWidth: "100%", height: "auto" }}
               />

@@ -36,8 +36,8 @@ class LayoutConfig:
 
     def __init__(
         self,
-        line_spacing: float = 1.2,
-        paragraph_spacing: float = 2.0,
+        line_spacing: float = 1.0,  # Reduced from 1.2
+        paragraph_spacing: float = 1.5,  # Reduced from 2.0
         word_spacing: float = 1.0,
         char_spacing: float = 1.0,
         alignment: str = "left",
@@ -201,7 +201,7 @@ class Hand:
                             style_id=default_style,
                             bias=default_bias,
                             stroke_color=default_color,
-                            stroke_width=default_width,
+                            stroke_width=defaultWidth,
                             scale=default_scale,
                         )
                     )
@@ -215,8 +215,8 @@ class Hand:
                                 text=char,
                                 style_id=default_style,
                                 bias=default_bias,
-                                stroke_color=default_color,
-                                stroke_width=default_width,
+                                stroke_color=defaultColor,
+                                stroke_width=defaultWidth,
                                 scale=default_scale,
                             )
                         )
@@ -371,8 +371,19 @@ class Hand:
         margins: Optional[Tuple[float, float, float, float]] = None,
     ):
         """Draw all segments with their respective styling."""
-        # Calculate total height based on number of lines and line spacing
+        # Use a smaller base value for very small line heights to allow tighter spacing
+        effective_base_height = self.base_line_height * min(
+            1.0, layout_config.line_spacing
+        )
+
+        # Calculate line height based on the adjusted base height
         line_height = self.base_line_height * layout_config.line_spacing
+
+        # For very tight spacing (less than 0.8), reduce line height further
+        if layout_config.line_spacing < 0.8:
+            line_height = effective_base_height * (0.5 + layout_config.line_spacing / 2)
+
+        # Calculate total height based on number of lines and line spacing
         num_lines = len(segments_by_line)
 
         # Calculate height for empty document (minimum 1 line height)
@@ -400,8 +411,8 @@ class Hand:
 
         # Track current y-position with top margin
         y_position = top_margin + (
-            line_height * 0.75
-        )  # Start position, adjusted for baseline
+            line_height * 0.7
+        )  # Start position, adjusted for baseline (reduced from 0.75)
 
         # Process each line
         for i, line_segments in enumerate(segments_by_line):
@@ -422,9 +433,16 @@ class Hand:
                 # For empty lines (paragraph breaks), use paragraph spacing
                 # But only if previous line wasn't already empty
                 if not prev_was_empty:
-                    paragraph_height = (
-                        self.base_line_height * layout_config.paragraph_spacing
-                    )
+                    # Calculate paragraph spacing with similar adjustment for small values
+                    if layout_config.paragraph_spacing < 0.8:
+                        paragraph_height = self.base_line_height * (
+                            0.5 + layout_config.paragraph_spacing / 2
+                        )
+                    else:
+                        paragraph_height = (
+                            self.base_line_height * layout_config.paragraph_spacing
+                        )
+
                     y_position += paragraph_height
                 else:
                     # If previous line was also empty, just use regular line spacing
@@ -559,3 +577,77 @@ class Hand:
         ).fill("none")
 
         dwg.add(path)
+
+    def write_multi_page(
+        self,
+        filename_template: str,
+        segments_by_line: List[TextSegment],
+        layout_config: Optional[LayoutConfig] = None,
+        page_dimensions: Optional[Tuple[float, float]] = None,
+        margins: Optional[Tuple[float, float, float, float]] = None,
+        max_lines_per_page: int = 25,
+    ) -> List[str]:
+        """
+        Generate handwriting for text that may span multiple pages.
+
+        Args:
+            filename_template: Template for filenames (e.g., "output_page_{}.svg")
+            segments_by_line: List of lists of TextSegment objects, grouped by line
+            layout_config: Optional layout configuration
+            page_dimensions: Optional (width, height) for the page in pixels
+            margins: Optional (left, top, right, bottom) margins in pixels
+            max_lines_per_page: Maximum number of lines to fit on one page
+
+        Returns:
+            List of filenames for the generated SVG pages
+        """
+        # Use default layout config if none provided
+        if layout_config is None:
+            layout_config = LayoutConfig()
+
+        # Validate all characters in segments
+        self._validate_segments(segments_by_line)
+
+        # Sample strokes for each segment
+        self._sample_segments(segments_by_line)
+
+        # Split the segments into pages
+        pages_segments = []
+        current_page = []
+        line_count = 0
+
+        for line_segments in segments_by_line:
+            if line_count >= max_lines_per_page:
+                # Start a new page
+                pages_segments.append(current_page)
+                current_page = []
+                line_count = 0
+
+            current_page.append(line_segments)
+
+            # Check if this is an empty line (paragraph break)
+            is_empty_line = len(line_segments) == 0 or (
+                len(line_segments) == 1 and not line_segments[0].text.strip()
+            )
+
+            # Increment line count - empty lines still count as lines
+            line_count += 1
+
+        # Add the last page if not empty
+        if current_page:
+            pages_segments.append(current_page)
+
+        # Generate each page
+        filenames = []
+        for i, page_content in enumerate(pages_segments):
+            # Generate unique filename for this page
+            page_filename = filename_template.format(i + 1)
+
+            # Draw the page
+            self._draw_segments(
+                page_filename, page_content, layout_config, page_dimensions, margins
+            )
+
+            filenames.append(page_filename)
+
+        return filenames

@@ -283,11 +283,12 @@ async def generate_a4_page(
     bias: Optional[float] = Body(0.5),
     stroke_color: Optional[str] = Body("black"),
     stroke_width: Optional[float] = Body(2.0),
-    line_height: Optional[float] = Body(1.5),
-    paragraph_spacing: Optional[float] = Body(2.0),
+    line_height: Optional[float] = Body(1.0),  # Reduced from 1.5
+    paragraph_spacing: Optional[float] = Body(1.5),  # Reduced from 2.0
+    lines_per_page: Optional[int] = Body(30),  # Increased from 25 to fit more lines
 ):
     """
-    Generate handwriting on an A4-sized page, automatically splitting text into lines.
+    Generate handwriting on A4-sized pages, automatically splitting text across multiple pages if needed.
 
     Args:
         text: The text to convert to handwriting
@@ -297,6 +298,7 @@ async def generate_a4_page(
         stroke_width: The width of the handwriting strokes
         line_height: The height of each line (as a multiple of the base line height)
         paragraph_spacing: The spacing between paragraphs (as a multiple of the base line height)
+        lines_per_page: Maximum number of lines per page
     """
     try:
         # A4 dimensions in pixels (assuming 96 DPI)
@@ -369,31 +371,33 @@ async def generate_a4_page(
             )
             segments_by_line.append([segment])
 
-        # Create a temporary file for the SVG output
-        with tempfile.NamedTemporaryFile(suffix=".svg", delete=False) as temp_file:
-            output_path = temp_file.name
+        # Create a temporary directory for the SVG output
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Generate template for page filenames
+            output_template = os.path.join(temp_dir, "a4_page_{}.svg")
 
-        # Generate the handwriting with A4 dimensions
-        hand.write_segments(
-            filename=output_path,
-            segments_by_line=segments_by_line,
-            layout_config=layout_config,
-            page_dimensions=(page_width, page_height),
-            margins=(left_margin, top_margin, right_margin, bottom_margin),
-        )
+            # Generate the handwriting with A4 dimensions (potentially multiple pages)
+            page_files = hand.write_multi_page(
+                filename_template=output_template,
+                segments_by_line=segments_by_line,
+                layout_config=layout_config,
+                page_dimensions=(page_width, page_height),
+                margins=(left_margin, top_margin, right_margin, bottom_margin),
+                max_lines_per_page=lines_per_page,
+            )
 
-        # Read the generated SVG file
-        with open(output_path, "r") as f:
-            svg_content = f.read()
-
-        # Clean up the temporary file
-        os.unlink(output_path)
+            # Read all the generated SVG files
+            pages_content = []
+            for page_file in page_files:
+                with open(page_file, "r") as f:
+                    pages_content.append(f.read())
 
         return {
             "status": "success",
-            "svg_content": svg_content,
+            "pages": pages_content,
             "message": "A4 page handwriting generated successfully",
             "line_count": len(lines),
+            "page_count": len(pages_content),
             "page_format": "A4",
         }
     except Exception as e:

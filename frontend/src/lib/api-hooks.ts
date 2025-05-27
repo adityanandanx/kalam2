@@ -38,13 +38,15 @@ export interface GenerateA4PageParams {
   stroke_width?: number;
   line_height?: number;
   paragraph_spacing?: number;
+  lines_per_page?: number;
 }
 
 export interface GenerateA4PageResponse {
   status: string;
-  svg_content: string;
+  pages: string[]; // Changed from svg_content to pages array
   message: string;
   line_count: number;
+  page_count: number; // Added page_count
   page_format: string;
 }
 
