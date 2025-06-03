@@ -1,15 +1,19 @@
-# Kalam3
+<center><h1>Kalam2</h1></center>
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-Frontend-black?logo=next.js)](https://nextjs.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+Kalam2 is a full-stack handwriting generation application. It consists of a FastAPI backend for generating SVG handwriting using machine learning, and a Next.js frontend for user interaction and visualization.
+</p>
+
+<p align="center">
+   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.9%2B-blue?logo=python" alt="Python"></a>
+   <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-Backend-green?logo=fastapi" alt="FastAPI"></a>
+   <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-Frontend-black?logo=next.js" alt="Next.js"></a>
+   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
 <p align="center">
   <img src="output.png" alt="Kalam3 Screenshot" width="600"/>
 </p>
-
-Kalam3 is a full-stack handwriting generation application. It consists of a FastAPI backend for generating SVG handwriting using machine learning, and a Next.js frontend for user interaction and visualization.
 
 ## Features
 
