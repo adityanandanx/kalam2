@@ -1,4 +1,4 @@
-<center><h1>Kalam2</h1></center>
+<h1 align="center">Kalam2</h1>
 
 <p align="center">
 Kalam2 is a full-stack handwriting generation application. It consists of a FastAPI backend for generating SVG handwriting using machine learning, and a Next.js frontend for user interaction and visualization.
